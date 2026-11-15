@@ -227,7 +227,7 @@ button.sync{border:0;background:transparent;padding:0;font:inherit;font-size:.75
 <script>
 
 var KEY='kioskpos_v1';
-var APP_VER=14,UI_KEY='kioskpos_ui',SIZES=[{n:'Normal',s:1},{n:'Large',s:1.2},{n:'Extra large',s:1.4},{n:'Huge',s:1.6}],sizeIdx=0;
+var APP_VER=15,UI_KEY='kioskpos_ui',SIZES=[{n:'Normal',s:1},{n:'Large',s:1.2},{n:'Extra large',s:1.4},{n:'Huge',s:1.6}],sizeIdx=0;
 function applySize(){document.documentElement.style.fontSize=(16*SIZES[sizeIdx].s)+'px'}
 var lastItemCat='';
 function saveUi(){try{localStorage.setItem(UI_KEY,JSON.stringify({size:sizeIdx,cat:lastItemCat}))}catch(e){}}
@@ -250,6 +250,7 @@ function setSync(st){
  else{e.textContent='Works offline · v'+APP_VER;e.className='sync'}
 }
 function save(){
+ try{menuCheck()}catch(e){}
  try{localStorage.setItem(KEY,JSON.stringify(S));setSync('saved')}
  catch(e){storageOK=false;setSync('error');toast('Could not save on this iPad. Make a backup now.')}
 }
@@ -893,7 +894,7 @@ else h+='<input id="itemQ" type="search" placeholder="🔍 Search items" autocom
 h+='<div id="itemList"></div>';
 h+='</div>';
  var mn=0,mp=0;S.items.forEach(function(i){if(i.kind==='sale'&&menuOn(i)){mn++;if(PH[i.id])mp++}});
- h+='<div class="card"><h3>Customer menu (QR code)</h3><div class="note" style="margin:0 0 0.625rem">'+mn+' item'+(mn===1?'':'s')+' will show on the menu, '+mp+' with a photo. Choose what shows and add photos when you edit an item. After any change, tap Publish menu and upload the file to GitHub.</div><button class="btn" id="pubMenu">Publish menu</button></div>';
+ h+='<div class="card"><h3>Customer menu (QR code)</h3><div class="note" style="margin:0 0 0.625rem">'+mn+' item'+(mn===1?'':'s')+' show on the menu, '+mp+' with a photo. Choose what shows and add photos when you edit an item.</div><div id="ghStat" style="font-weight:600;margin-bottom:0.625rem"></div><div class="row">'+(ghOn()?'<button class="btn" id="pubMenu">Publish now</button><a class="btn sec" id="openMenu" target="_blank" rel="noopener" href="'+esc(menuUrl())+'" style="text-decoration:none;display:inline-flex;align-items:center">Open menu</a><button class="btn sec" id="ghSet">Settings</button><button class="btn sec" id="pubFile">Save file</button>':'<button class="btn" id="ghSet">Set up automatic publishing</button><button class="btn sec" id="pubMenu">Publish as a file</button>')+'</div></div>';
  h+='<div class="card"><h3>Backup</h3><div class="note" style="margin:0 0 0.625rem">Everything is saved automatically on this device and works with no internet. It is kept only on this device, so make a backup copy regularly and keep it in Notes or email it to yourself.<br><b>App version '+APP_VER+'</b> · <b>Last backup: '+(S.lastBackup?fmtDT(S.lastBackup):'never')+'</b></div><div class="row"><button class="btn sec sm" id="bkExport">Backup data</button><button class="btn sec sm" id="bkImport">Restore backup</button><button class="btn sec sm" id="csvExport">Sales as CSV</button></div></div>';
  $('itemsView').innerHTML=h;
  $('sizeSeg').querySelectorAll('button').forEach(function(b){b.onclick=function(){setSize(+b.dataset.z);renderItems()}});
@@ -907,7 +908,9 @@ h+='</div>';
  $('addItem').onclick=function(){editItem(null)};
  drawItemList();if($('itemQ'))$('itemQ').oninput=function(){itemQ=this.value;drawItemList()};
  $('bkExport').onclick=function(){showText('Backup data',JSON.stringify(S),'Tap Copy and paste it into Notes, or tap Save file. Use Restore backup to load it again.','kiosk-backup-'+today()+'.txt',function(){S.lastBackup=Date.now();save();setSync('saved');if(curView==='items')renderItems()})};
- $('pubMenu').onclick=publishMenuDialog;
+ $('pubMenu').onclick=ghOn()?function(){ghPublish(true)}:publishMenuDialog;
+ if($('pubFile'))$('pubFile').onclick=publishMenuDialog;
+ $('ghSet').onclick=ghDialog;ghStatus();
  $('bkImport').onclick=restoreDialog;
  $('csvExport').onclick=function(){
   var rows=[['Invoice','Date','Time','Category','Item','Qty','Price USD','Cost USD','Line total USD','Rate LBP','Voided','Invoice discount USD (first line)']];
@@ -922,7 +925,7 @@ function restoreDialog(){
  $('rGo').onclick=function(){
   var txt=$('rtx').value,d;
   try{d=JSON.parse(txt);if(!d.items||!d.sales||!d.cats)throw 0}catch(e){toast('That is not a valid backup');return}
-  ask('Replace ALL current data with this backup?','Replace',function(){S=d;if(!S.rate)S.rate=89500;if(!S.store)S.store='Kiosk';migrate();cart={};cartOrder=[];activeTab=null;fastStash=null;save();closeModal();refresh();toast('Backup restored')},restoreDialog);
+  ask('Replace ALL current data with this backup?','Replace',function(){S=d;if(!S.rate)S.rate=89500;if(!S.store)S.store='Kiosk';migrate();cart={};cartOrder=[];activeTab=null;fastStash=null;lastSig=menuSig();save();closeModal();refresh();toast('Backup restored')},restoreDialog);
  };
 }
 var eDraft=null;
@@ -954,8 +957,8 @@ function ingredientOptions(sel,q){
 var PH={},phDb=null;
 function phOpen(cb){try{var r=indexedDB.open('kioskpos_photos',1);r.onupgradeneeded=function(){r.result.createObjectStore('p')};r.onsuccess=function(){phDb=r.result;phLoad(cb)};r.onerror=function(){cb&&cb()}}catch(e){cb&&cb()}}
 function phLoad(cb){try{var rq=phDb.transaction('p').objectStore('p').openCursor();rq.onsuccess=function(){var c=rq.result;if(c){PH[c.key]=c.value;c.continue()}else cb&&cb()};rq.onerror=function(){cb&&cb()}}catch(e){cb&&cb()}}
-function phPut(id,v){PH[id]=v;if(!phDb)return;try{phDb.transaction('p','readwrite').objectStore('p').put(v,id)}catch(e){}}
-function phDel(id){delete PH[id];if(!phDb)return;try{phDb.transaction('p','readwrite').objectStore('p').delete(id)}catch(e){}}
+function phPut(id,v){PH[id]=v;try{menuDirty()}catch(e){}if(!phDb)return;try{phDb.transaction('p','readwrite').objectStore('p').put(v,id)}catch(e){}}
+function phDel(id){delete PH[id];try{menuDirty()}catch(e){}if(!phDb)return;try{phDb.transaction('p','readwrite').objectStore('p').delete(id)}catch(e){}}
 function menuOn(i){return i.menu!==undefined?!!i.menu:!/cig/i.test(i.cat||'')}
 function shrinkPhoto(file,cb){
  var r=new FileReader();
@@ -984,6 +987,72 @@ function publishMenuDialog(){
  $('mClose2').onclick=closeModal;
  $('mSave').onclick=function(){try{var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));a.download='menu.json';document.body.appendChild(a);a.click();setTimeout(function(){a.remove()},800);toast('Saved menu.json. Now upload it to GitHub.')}catch(e){toast('Could not save the file')}};
 }
+/* automatic menu publishing to GitHub (token stays on this device only, not in backups) */
+var GH_KEY='kioskpos_gh',gh={repo:'',branch:'main',token:'',pending:false,last:0,err:'',sig:''},ghBusy=false,ghTimer=null,lastSig=null;
+function ghLoad(){try{var u=JSON.parse(localStorage.getItem(GH_KEY)||'{}');for(var k in u)gh[k]=u[k]}catch(e){}}
+function ghSave(){try{localStorage.setItem(GH_KEY,JSON.stringify(gh))}catch(e){}}
+function ghOn(){return !!(gh.repo&&gh.token)}
+function menuUrl(){var p=gh.repo.split('/');return p.length===2?'https://'+p[0].toLowerCase()+'.github.io/'+p[1]+'/menu.html':''}
+function menuSig(){return S.cats.join('|')+'#'+S.items.filter(function(i){return i.kind==='sale'}).map(function(i){return i.id+':'+i.name+':'+i.price+':'+i.cat+':'+(menuOn(i)?1:0)}).join(';')}
+function menuCheck(){var g=menuSig();if(lastSig===null){lastSig=g;return}if(g!==lastSig){lastSig=g;menuDirty()}}
+function menuDirty(){if(!ghOn())return;gh.pending=true;ghSave();clearTimeout(ghTimer);ghTimer=setTimeout(function(){ghPublish(false)},4000);ghStatus()}
+function ghStatus(msg){
+ var e=$('ghStat');if(!e)return;
+ var t,c='';
+ if(msg){t=msg}
+ else if(!ghOn()){t='Not connected. Without it you must upload menu.json to GitHub yourself after each change.'}
+ else if(gh.err){t='⚠️ '+gh.err;c='var(--bad)'}
+ else if(gh.pending||ghBusy){t='⏳ Changes waiting to be published…'}
+ else if(gh.last){t='✅ Menu is up to date. Last published '+fmtDT(gh.last);c='var(--ok)'}
+ else t='Connected. Tap Publish now.';
+ e.textContent=t;e.style.color=c;
+}
+function ghPublish(manual,retry){
+ if(!ghOn()){return}
+ if(ghBusy){gh.pending=true;return}
+ if(navigator.onLine===false){gh.err='No internet. It will publish when the connection is back.';gh.pending=true;ghSave();ghStatus();if(manual)toast('No internet right now');return}
+ ghBusy=true;gh.err='';gh.pending=false;ghStatus('Publishing…');
+ var txt=JSON.stringify(buildMenu()),b64=btoa(unescape(encodeURIComponent(txt)));
+ var url='https://api.github.com/repos/'+gh.repo+'/contents/menu.json';
+ var H={'Authorization':'Bearer '+gh.token,'Accept':'application/vnd.github+json'};
+ function fail(m,keep){ghBusy=false;gh.err=m;if(keep)gh.pending=true;ghSave();ghStatus();if(manual)toast(m)}
+ fetch(url+'?ref='+encodeURIComponent(gh.branch)+'&t='+Date.now(),{headers:H,cache:'no-store'}).then(function(r){
+  if(r.status===404)return null;
+  if(r.status===401){throw {m:'GitHub rejected the token. Create a new token in Settings.'}}
+  if(!r.ok)throw {m:'GitHub error '+r.status+' while checking the menu file.'};
+  return r.json();
+ }).then(function(cur){
+  var body={message:'Update menu '+today(),content:b64,branch:gh.branch};if(cur&&cur.sha)body.sha=cur.sha;
+  return fetch(url,{method:'PUT',headers:{'Authorization':'Bearer '+gh.token,'Accept':'application/vnd.github+json','Content-Type':'application/json'},body:JSON.stringify(body)});
+ }).then(function(r){
+  if(r.ok){ghBusy=false;gh.last=Date.now();gh.err='';ghSave();ghStatus();if(manual)toast('Menu published. It may take a minute to appear.');if(gh.pending){clearTimeout(ghTimer);ghTimer=setTimeout(function(){ghPublish(false)},1500)}return}
+  if((r.status===409||r.status===422)&&!retry){ghBusy=false;return ghPublish(manual,true)}
+  if(r.status===401)throw {m:'GitHub rejected the token. Create a new token in Settings.'};
+  if(r.status===403||r.status===404)throw {m:'No permission or wrong repository name. Check the repository and that the token allows Contents: Read and write.'};
+  throw {m:'GitHub error '+r.status+'.'};
+ }).catch(function(e){
+  if(e&&e.m)fail(e.m,false);else fail('No internet. It will publish when the connection is back.',true);
+ });
+}
+function ghDialog(){
+ openModal('<h3>Automatic menu publishing</h3>'+
+  '<div class="note" style="margin:0 0 0.75rem">The app sends your menu to GitHub by itself after you add or change items, prices or photos. The token is saved on this device only and is not part of backups.</div>'+
+  '<div class="f"><label for="ghRepo">GitHub repository (owner/name)</label><input id="ghRepo" value="'+esc(gh.repo)+'" placeholder="hassandhr/app-test" autocapitalize="off" autocorrect="off" spellcheck="false"></div>'+
+  '<div class="f"><label for="ghTok">Token</label><input id="ghTok" type="password" value="'+esc(gh.token)+'" placeholder="paste the token here" autocapitalize="off" autocorrect="off" spellcheck="false"></div>'+
+  '<div class="f"><label for="ghBr">Branch</label><input id="ghBr" value="'+esc(gh.branch||'main')+'" autocapitalize="off"></div>'+
+  '<details style="margin:0 0 0.75rem"><summary style="font-weight:700;cursor:pointer">How to create the token</summary><ol style="margin:0.5rem 0 0;padding-left:1.25rem;line-height:1.6;font-size:0.9375rem"><li>On github.com tap your profile picture → <b>Settings</b> → scroll to the bottom → <b>Developer settings</b>.</li><li><b>Personal access tokens → Fine-grained tokens → Generate new token</b>.</li><li>Name: <i>kiosk menu</i>. Expiration: the longest choice.</li><li><b>Repository access → Only select repositories</b> and pick your menu repository.</li><li><b>Permissions → Repository permissions → Contents → Read and write</b>.</li><li>Tap <b>Generate token</b>, copy it now (GitHub shows it once) and paste it above.</li></ol></details>'+
+  '<div class="row"><button class="btn" id="ghOk" style="flex:1">Save and publish</button>'+(ghOn()?'<button class="btn bad" id="ghOff">Disconnect</button>':'')+'<button class="btn sec" id="ghNo">Cancel</button></div>');
+ $('ghNo').onclick=closeModal;
+ $('ghOk').onclick=function(){
+  var r=$('ghRepo').value.trim().replace(/^https?:\/\/github\.com\//i,'').replace(/\/+$/,''),t=$('ghTok').value.trim(),b=$('ghBr').value.trim()||'main';
+  if(!/^[\w.-]+\/[\w.-]+$/.test(r)){toast('Write the repository like owner/name');return}
+  if(!t){toast('Paste the token');return}
+  gh.repo=r;gh.token=t;gh.branch=b;gh.err='';ghSave();closeModal();renderItems();ghPublish(true);
+ };
+ if($('ghOff'))$('ghOff').onclick=function(){gh.token='';gh.pending=false;gh.err='';ghSave();closeModal();renderItems()};
+}
+ghLoad();
+window.addEventListener('online',function(){if(ghOn()&&gh.pending)ghPublish(false)});
 function lastCatGuess(){
  if(S.cats.indexOf(lastItemCat)>=0)return lastItemCat;
  for(var k=S.items.length-1;k>=0;k--){if(S.items[k].kind==='sale'&&S.cats.indexOf(S.items[k].cat)>=0)return S.items[k].cat}
@@ -1087,7 +1156,8 @@ buildNumpad();
 $('sizeBtn').onclick=function(){setSize((sizeIdx+1)%SIZES.length);toast('Text size: '+SIZES[sizeIdx].n);if(curView==='items')renderItems()};
 $('sync').onclick=function(){if(backupDue())showView('items')};
 showView('home');
-phOpen(function(){if(curView==='items')renderItems()});
+lastSig=menuSig();
+phOpen(function(){if(curView==='items')renderItems();if(ghOn()&&gh.pending)setTimeout(function(){ghPublish(false)},2500)});
 initDb();
 
 /* Offline: keep the app files on the device */

@@ -1,5 +1,5 @@
 /* Keeps the app on the device so it opens with no internet. */
-var CACHE = 'kiosk-pos-v14';
+var CACHE = 'kiosk-pos-v15';
 var FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', function (e) {
@@ -20,6 +20,7 @@ self.addEventListener('activate', function (e) {
 
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
+  if (new URL(e.request.url).origin !== location.origin) return;
   if (/\/menu\.(json|html)/.test(e.request.url) || /\/logo\.png/.test(e.request.url)) return;
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(function (hit) {
