@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#03311e">
+<title>Saad Coffee Shop - Menu</title>
+<link rel="icon" href="logo.png">
+<style>
+:root{--bg:#03311e;--bg2:#0a452b;--card:#0b4a2e;--cream:#f5e1ba;--mute:#c9b88f;--line:rgba(245,225,186,.18)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--cream);font-family:Georgia,"Times New Roman",serif;line-height:1.35;-webkit-text-size-adjust:100%}
+header{text-align:center;padding:calc(1.5rem + env(safe-area-inset-top)) 1rem 1rem}
+header img{width:9.5rem;height:9.5rem;border-radius:50%;display:block;margin:0 auto;box-shadow:0 0.5rem 1.5rem rgba(0,0,0,.35);border:0.1875rem solid var(--cream)}
+.slogan{margin:0.875rem 0 0;font-style:italic;font-size:1.125rem;letter-spacing:.03em;color:var(--cream)}
+.slogan:before,.slogan:after{content:"";display:inline-block;width:1.5rem;height:1px;background:var(--mute);vertical-align:middle;margin:0 0.625rem}
+nav{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:0.625rem 0.75rem;display:flex;gap:0.5rem;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav a{flex:none;color:var(--cream);text-decoration:none;border:1px solid var(--line);border-radius:62.4375rem;padding:0.5rem 1rem;font-size:0.9375rem;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-weight:600}
+nav a.on{background:var(--cream);color:var(--bg);border-color:var(--cream)}
+main{max-width:40rem;margin:0 auto;padding:0.5rem 1rem 3rem}
+section{padding-top:1.25rem;scroll-margin-top:4rem}
+h2{margin:0 0 0.75rem;font-size:1.5rem;font-weight:700;display:flex;align-items:center;gap:0.75rem}
+h2:after{content:"";flex:1;height:1px;background:var(--line)}
+.item{display:flex;align-items:center;gap:0.875rem;background:var(--card);border:1px solid var(--line);border-radius:1rem;padding:0.625rem;margin-bottom:0.625rem}
+.ph{flex:none;width:5.25rem;height:5.25rem;border-radius:0.75rem;object-fit:cover;background:var(--bg2)}
+.noph{flex:none;width:5.25rem;height:5.25rem;border-radius:0.75rem;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:2rem;opacity:.75}
+.nm{flex:1;min-width:0;font-size:1.125rem;font-weight:700}
+.pr{flex:none;background:var(--cream);color:var(--bg);border-radius:62.4375rem;padding:0.375rem 0.875rem;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-weight:800;font-size:1.0625rem}
+.msg{text-align:center;color:var(--mute);padding:2.5rem 1rem;font-family:system-ui,sans-serif}
+footer{text-align:center;color:var(--mute);font-size:0.8125rem;padding:1rem 1rem 2rem;font-family:system-ui,sans-serif}
+@media(min-width:600px){.ph,.noph{width:6.5rem;height:6.5rem}.nm{font-size:1.25rem}}
+</style>
+</head>
+<body>
+<header>
+ <img src="logo.png" alt="Saad Coffee Shop">
+ <p class="slogan">A stop you never skip</p>
+</header>
+<nav id="nav" hidden></nav>
+<main id="menu"><div class="msg">Loading the menu…</div></main>
+<footer id="foot"></footer>
+<script>
+(function(){
+ function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+ function price(p){var v=Number(p)||0;return '$'+(Math.round(v*100)%100===0?v.toFixed(0)+'.00':v.toFixed(2))}
+ var main=document.getElementById('menu'),nav=document.getElementById('nav');
+ fetch('menu.json?t='+Date.now(),{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){
+  var cats=(d.cats||[]).filter(function(c){return c.items&&c.items.length});
+  if(!cats.length){main.innerHTML='<div class="msg">The menu is coming soon.</div>';return}
+  nav.hidden=false;
+  nav.innerHTML=cats.map(function(c,i){return '<a href="#c'+i+'" data-i="'+i+'">'+esc(c.name)+'</a>'}).join('');
+  main.innerHTML=cats.map(function(c,i){
+   return '<section id="c'+i+'"><h2>'+esc(c.name)+'</h2>'+c.items.map(function(it){
+    return '<div class="item">'+(it.img?'<img class="ph" loading="lazy" alt="'+esc(it.n)+'" src="'+esc(it.img)+'">':'<div class="noph" aria-hidden="true">☕</div>')+'<div class="nm">'+esc(it.n)+'</div><div class="pr">'+price(it.p)+'</div></div>';
+   }).join('')+'</section>';
+  }).join('');
+  document.getElementById('foot').textContent=d.updated?'Prices updated '+d.updated:'';
+  var links=nav.querySelectorAll('a'),secs=main.querySelectorAll('section');
+  function mark(i){links.forEach(function(a,k){a.classList.toggle('on',k===i)});if(links[i])links[i].scrollIntoView({block:'nearest',inline:'center'})}
+  mark(0);
+  if('IntersectionObserver' in window){
+   var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)mark(+e.target.id.slice(1))})},{rootMargin:'-20% 0px -70% 0px'});
+   secs.forEach(function(s){io.observe(s)});
+  }
+ }).catch(function(){main.innerHTML='<div class="msg">The menu could not be loaded. Please try again in a moment.</div>'});
+})();
+</script>
+</body>
+</html>
